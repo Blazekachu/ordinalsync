@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+contracts/target/
+contracts/.snfoundry_cache/
+frontend/.next/
+frontend/out/
+**/dist/
+**/build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Starknet account / wallet config
+snfoundry.toml
+**/snfoundry.toml
+starknet_accounts/
+**/starknet_accounts/
+.starknet_accounts/
+
+# Internal agent / planning files
+AGENTS.md
+CLAUDE.md
+**/AGENTS.md
+**/CLAUDE.md
+**/docs/superpowers/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
