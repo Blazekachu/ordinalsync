@@ -139,6 +139,10 @@ State machine: `IDLE → ACTIVE → (INVALIDATED | IDLE)`. Re-tokenization permi
 
 **Phase 1 (this repo):** Working tokenize flow on Sepolia. Trusted header verifier and keccak-based merkle (PoC shortcuts, clearly marked in source).
 
+Known Phase 1 limitations, to be fixed in Phase 2:
+- `inscription_id` is stored on-chain as a Cairo `felt252`, which holds only ~31 ASCII characters. Full inscription IDs are 66 characters, so the on-chain value is truncated. Phase 2 switches this to a Cairo `ByteArray`.
+- The auto-relayer is a prototype (detection logic only — not connected to a Bitcoin node, does not submit transactions), and `tokenize()` does not yet enforce L1 ownership verification. See [`SECURITY.md`](./SECURITY.md).
+
 **Phase 2:** ZeroSync-based trustless header chain verification (real PoW + sha256d), real Bitcoin TX construction via `scure-btc-signer`, Xverse integration, production relayer connected to a live Bitcoin testnet4 node.
 
 **Phase 3:** Collateral bonds, mempool monitoring, covenant-based trustless locking (OP_CTV / OP_CAT / OP_VAULT when available).

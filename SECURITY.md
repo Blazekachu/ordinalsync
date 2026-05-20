@@ -72,7 +72,30 @@ This eliminates the trust assumption entirely. No bonds, no mempool monitoring r
 
 ---
 
-## 5. Out-of-Scope Threats (Not Addressed by This Design)
+## 5. Phase 1 PoC Implementation Gaps
+
+The current proof-of-concept deliberately leaves parts of the security model
+unimplemented. These are scoped fixes, not design flaws — the protocol design
+accounts for them; the PoC code does not yet enforce them.
+
+- **`tokenize()` does not verify L1 ownership.** The PoC registry accepts a
+  tokenize proof and mints a synthetic without checking that the tokenizer
+  actually controls the inscription's UTXO on Bitcoin. Anyone can currently
+  tokenize any inscription. The spec's ownership-proof step (the commit TX
+  input address must control the inscription UTXO) is defined but not enforced
+  in the contract. Phase 2 enforces it in `tokenize()`.
+- **The auto-relayer is a non-operational prototype.** `indexer/src/relayer.ts`
+  contains the UTXO-spend detection logic but is not connected to a Bitcoin
+  node and does not submit transactions to Starknet. Consequently
+  `OrdinalRegistry.invalidate()` is never called and no synthetic is ever
+  frozen on-chain — even when the frontend's L1-owner check flags a mismatch.
+  The frontend "OWNER CHANGED" badge is a client-side hint only; on-chain
+  `is_frozen` stays `false` until a real relayer submits invalidation proofs.
+  Milestone 3 delivers the operational relayer.
+
+---
+
+## 6. Out-of-Scope Threats (Not Addressed by This Design)
 
 Honest disclosure of what this design does **not** protect against:
 
@@ -83,7 +106,7 @@ Honest disclosure of what this design does **not** protect against:
 
 ---
 
-## 6. Reporting a Vulnerability
+## 7. Reporting a Vulnerability
 
 If you discover a security issue, please disclose responsibly. Open a GitHub issue marked `[security]` for non-critical findings, or contact the maintainers privately for anything that could lead to fund loss or false invalidation.
 
