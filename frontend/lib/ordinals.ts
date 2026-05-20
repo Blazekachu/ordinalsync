@@ -39,21 +39,24 @@ export interface InscriptionMetadata {
   fee: number;
   value: number;
   charms: string[];
-  next: string | null;
-  previous: string | null;
+  // Not returned by /r/inscription/<id> — optional.
+  next?: string | null;
+  previous?: string | null;
 }
 
 /**
- * Fetch inscription metadata from ordinals.com JSON API.
- * Uses Accept: application/json to get structured data.
+ * Fetch inscription metadata from ordinals.com.
+ *
+ * Uses ord's recursive endpoint /r/inscription/<id>, which returns JSON
+ * natively (200, application/json, CORS *). The older /inscription/<id>
+ * with `Accept: application/json` now returns HTTP 406 — ordinals.com
+ * dropped JSON from that route.
  */
 export async function fetchInscriptionMetadata(
   inscriptionId: string,
 ): Promise<InscriptionMetadata | null> {
   try {
-    const res = await fetch(`${ORDINALS_BASE}/inscription/${inscriptionId}`, {
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetch(`${ORDINALS_BASE}/r/inscription/${inscriptionId}`);
     if (!res.ok) return null;
     return await res.json();
   } catch {
