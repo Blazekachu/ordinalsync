@@ -22,6 +22,32 @@ const RPC_URL =
 
 type OwnerVerification = 'verified' | 'mismatch' | 'pending';
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Verify one inscription's L1 owner against ordinals.com, retrying on
+// failure. ordinals.com rate-limits rapid calls, so transient failures are
+// common — without retry they silently degrade to 'pending' and the card
+// wrongly shows plain ACTIVE instead of OWNER CHANGED.
+async function verifyOwnerWithRetry(
+  inscriptionId: string,
+  ownerAddress: string,
+): Promise<OwnerVerification> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const meta = await fetchInscriptionMetadata(inscriptionId);
+      if (meta && meta.address && ownerAddress) {
+        return meta.address.toLowerCase() === ownerAddress.toLowerCase()
+          ? 'verified'
+          : 'mismatch';
+      }
+    } catch {
+      // fall through to retry
+    }
+    if (attempt < 2) await sleep(600 * (attempt + 1));
+  }
+  return 'pending';
+}
+
 export default function Home() {
   const [inscriptions, setInscriptions] = useState<TokenizedInscription[]>([]);
   const [onChainStatus, setOnChainStatus] = useState<Record<string, string>>({});
@@ -32,47 +58,44 @@ export default function Home() {
     fetchTokenized()
       .then(async (data) => {
         setInscriptions(data);
+        if (data.length === 0) return;
 
-        if (data.length > 0) {
-          // Fetch on-chain status
-          try {
-            const provider = new RpcProvider({ nodeUrl: RPC_URL });
-            const registry = new Contract({
-              abi: ORDINAL_REGISTRY_ABI as any[],
-              address: ORDINAL_REGISTRY_ADDRESS,
-              providerOrAccount: provider,
-            });
-            const statuses: Record<string, string> = {};
-            for (const insc of data) {
-              try {
-                const result = await registry.call('get_status', [insc.inscriptionId]);
-                statuses[insc.inscriptionId] = decodeStatus(result as any);
-              } catch {
-                // Inscription not on-chain yet
-              }
-            }
-            setOnChainStatus(statuses);
-          } catch {
-            // RPC error — indexer data only
-          }
-
-          // Verify L1 owners against ordinals.com
-          const verifications: Record<string, OwnerVerification> = {};
+        // Fetch on-chain status
+        try {
+          const provider = new RpcProvider({ nodeUrl: RPC_URL });
+          const registry = new Contract({
+            abi: ORDINAL_REGISTRY_ABI as any[],
+            address: ORDINAL_REGISTRY_ADDRESS,
+            providerOrAccount: provider,
+          });
+          const statuses: Record<string, string> = {};
           for (const insc of data) {
             try {
-              const meta = await fetchInscriptionMetadata(insc.inscriptionId);
-              if (meta && insc.ownerAddress) {
-                verifications[insc.inscriptionId] =
-                  meta.address.toLowerCase() === insc.ownerAddress.toLowerCase()
-                    ? 'verified'
-                    : 'mismatch';
-              }
+              const result = await registry.call('get_status', [insc.inscriptionId]);
+              statuses[insc.inscriptionId] = decodeStatus(result as any);
             } catch {
-              // Can't verify — leave as pending
+              // Inscription not on-chain yet
             }
           }
-          setOwnerStatus(verifications);
+          setOnChainStatus(statuses);
+        } catch {
+          // RPC error — indexer data only
         }
+
+        // Verify L1 owners in the background — does not block card render.
+        // Each check retries on failure and staggers between inscriptions so
+        // ordinals.com rate-limiting doesn't drop later checks to 'pending'.
+        // Results fill in live as each resolves.
+        void (async () => {
+          for (const insc of data) {
+            const verdict = await verifyOwnerWithRetry(
+              insc.inscriptionId,
+              insc.ownerAddress,
+            );
+            setOwnerStatus((prev) => ({ ...prev, [insc.inscriptionId]: verdict }));
+            await sleep(300);
+          }
+        })();
       })
       .catch(console.error)
       .finally(() => setLoading(false));
