@@ -59,6 +59,7 @@ export default function InscriptionDetail() {
   const [onChain, setOnChain] = useState<OnChainEntry | null>(null);
   const [meta, setMeta] = useState<InscriptionMetadata | null>(null);
   const [loading, setLoading] = useState(true);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [releaseResult, setReleaseResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -94,10 +95,12 @@ export default function InscriptionDetail() {
       })
       .catch(() => {});
 
-    // Fetch metadata from ordinals.com
-    fetchInscriptionMetadata(id).then((data) => {
-      if (data) setMeta(data);
-    });
+    // Fetch metadata from ordinals.com — slow; gates the L1 owner check
+    fetchInscriptionMetadata(id)
+      .then((data) => {
+        if (data) setMeta(data);
+      })
+      .finally(() => setMetaLoading(false));
   }, [id]);
 
   async function handleRelease() {
@@ -160,13 +163,22 @@ export default function InscriptionDetail() {
     meta.address && inscription.ownerAddress &&
     meta.address.toLowerCase() !== inscription.ownerAddress.toLowerCase();
 
-  const displayStatus = ownerMismatch
+  // While the ordinals.com fetch is still in flight we can't yet know if the
+  // L1 owner matches — show a neutral "verifying" state instead of flashing
+  // "active" and then flipping to "invalidated" once the slow fetch lands.
+  const verifyingL1 = metaLoading && !!inscription?.ownerAddress;
+
+  const displayStatus = verifyingL1
+    ? 'verifying'
+    : ownerMismatch
     ? 'invalidated'
     : (onChain?.status || inscription?.status || 'idle');
   const statusColor = displayStatus === 'active'
     ? 'bg-green-900 text-green-300'
     : displayStatus === 'invalidated'
     ? 'bg-red-900 text-red-300'
+    : displayStatus === 'verifying'
+    ? 'bg-amber-900 text-amber-300'
     : 'bg-gray-800 text-gray-400';
 
   const isOwner = address && onChain?.ownerStarknet &&
@@ -196,7 +208,7 @@ export default function InscriptionDetail() {
             {meta ? `Inscription #${meta.number}` : 'Inscription'}
           </h1>
           <span className={`px-2 py-1 rounded text-xs font-bold ${statusColor}`}>
-            {displayStatus.toUpperCase()}
+            {displayStatus === 'verifying' ? 'VERIFYING L1 OWNER…' : displayStatus.toUpperCase()}
           </span>
         </div>
 
