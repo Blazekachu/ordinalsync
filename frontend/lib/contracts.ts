@@ -2,13 +2,13 @@
 // ABIs extracted from contracts/target/release/*.contract_class.json
 
 export const HEADER_VERIFIER_ADDRESS =
-  '0x050f4ce210000ec235937da131fb71ce40d6afff0d16f642881405565c41c187';
+  '0x005d0973e5743cccc7caf9c4d605d0d44a836060a841e92dd6f2e62b0c23d8c0';
 
 export const ORDINAL_REGISTRY_ADDRESS =
-  '0x05fa527701e55cc68a3b1db6bd9cd7f939c934e8eb138d564f90abff886f3294';
+  '0x026ef72983ef55e111915e0f82b491f1f7a329cdad646a3842435b1e4013c221';
 
 export const SYNTHETIC_ORDINALS_ADDRESS =
-  '0x0742b64f6056c16f937d184e53a7829f9b8fcc9d64a5a1c666896234a0147898';
+  '0x03af96a76fbdbb00c00f2b062b24082c3559d685f3da3e1ea360b2986fe5fbf6';
 
 export const STARKSCAN_BASE = 'https://sepolia.starkscan.co';
 
@@ -215,6 +215,13 @@ export const ORDINAL_REGISTRY_ABI = [
         outputs: [{ type: 'ordinalsync::types::RegistryEntry' }],
         state_mutability: 'view',
       },
+      {
+        type: 'function',
+        name: 'get_synthetic_ordinals',
+        inputs: [],
+        outputs: [{ type: 'core::starknet::contract_address::ContractAddress' }],
+        state_mutability: 'view',
+      },
     ],
   },
   {
@@ -222,6 +229,7 @@ export const ORDINAL_REGISTRY_ABI = [
     name: 'constructor',
     inputs: [
       { name: 'header_verifier_address', type: 'core::starknet::contract_address::ContractAddress' },
+      { name: 'synthetic_ordinals_address', type: 'core::starknet::contract_address::ContractAddress' },
     ],
   },
   {

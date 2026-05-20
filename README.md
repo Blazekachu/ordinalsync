@@ -20,11 +20,11 @@ strkBTC handles fungible BTC on Starknet. OrdinalSync handles the rest — speci
 
 | Contract | Address |
 |---|---|
-| HeaderVerifier | [`0x050f4ce2...c41c187`](https://sepolia.starkscan.co/contract/0x050f4ce210000ec235937da131fb71ce40d6afff0d16f642881405565c41c187) |
-| OrdinalRegistry | [`0x05fa5277...86f3294`](https://sepolia.starkscan.co/contract/0x05fa527701e55cc68a3b1db6bd9cd7f939c934e8eb138d564f90abff886f3294) |
-| SyntheticOrdinals | [`0x0742b64f...0147898`](https://sepolia.starkscan.co/contract/0x0742b64f6056c16f937d184e53a7829f9b8fcc9d64a5a1c666896234a0147898) |
+| HeaderVerifier | [`0x005d0973...23d8c0`](https://sepolia.starkscan.co/contract/0x005d0973e5743cccc7caf9c4d605d0d44a836060a841e92dd6f2e62b0c23d8c0) |
+| OrdinalRegistry | [`0x026ef729...013c221`](https://sepolia.starkscan.co/contract/0x026ef72983ef55e111915e0f82b491f1f7a329cdad646a3842435b1e4013c221) |
+| SyntheticOrdinals | [`0x03af96a7...fe5fbf6`](https://sepolia.starkscan.co/contract/0x03af96a76fbdbb00c00f2b062b24082c3559d685f3da3e1ea360b2986fe5fbf6) |
 
-Demo TXs: header submission `0x449df4d4...f9b49c` · tokenization `0x5f68abd0...a4ca00`
+The registry now performs a real cross-contract ERC-721 mint on tokenize (and freeze/burn on invalidate/release).
 
 ---
 

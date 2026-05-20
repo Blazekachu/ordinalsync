@@ -1,5 +1,6 @@
 use ordinalsync::ordinal_registry::{IOrdinalRegistryDispatcher, IOrdinalRegistryDispatcherTrait};
 use ordinalsync::header_verifier::{IHeaderVerifierDispatcher, IHeaderVerifierDispatcherTrait};
+use ordinalsync::synthetic_nft::{ISyntheticOrdinalsDispatcher, ISyntheticOrdinalsDispatcherTrait};
 use ordinalsync::types::{Status, TokenizeProof, TxInclusionProof, BlockHeader, SpentProof};
 use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
@@ -25,10 +26,25 @@ fn deploy_header_verifier_with_block() -> IHeaderVerifierDispatcher {
     verifier
 }
 
-fn deploy_registry(header_verifier_addr: starknet::ContractAddress) -> IOrdinalRegistryDispatcher {
+fn deploy_synthetic() -> ISyntheticOrdinalsDispatcher {
+    let contract = declare("SyntheticOrdinals").unwrap().contract_class();
+    // Registry address placeholder; SyntheticOrdinals does not enforce caller in PoC
+    // (get_caller_address v3 syscall incompatible with USC 2.8.0)
+    let zero_addr: ContractAddress = 0x0_felt252.try_into().unwrap();
+    let mut calldata = array![];
+    calldata.append(zero_addr.into());
+    let (address, _) = contract.deploy(@calldata).unwrap();
+    ISyntheticOrdinalsDispatcher { contract_address: address }
+}
+
+fn deploy_registry(
+    header_verifier_addr: ContractAddress,
+    synthetic_ordinals_addr: ContractAddress,
+) -> IOrdinalRegistryDispatcher {
     let contract = declare("OrdinalRegistry").unwrap().contract_class();
     let mut calldata = array![];
     calldata.append(header_verifier_addr.into());
+    calldata.append(synthetic_ordinals_addr.into());
     let (address, _) = contract.deploy(@calldata).unwrap();
     IOrdinalRegistryDispatcher { contract_address: address }
 }
@@ -49,25 +65,31 @@ fn make_inclusion_proof() -> TxInclusionProof {
     }
 }
 
-fn make_tokenize_proof() -> TokenizeProof {
-    // Use zero address as recipient — matches default snforge test caller
-    let zero_addr: ContractAddress = 0x0_felt252.try_into().unwrap();
+fn make_tokenize_proof_for(recipient: ContractAddress) -> TokenizeProof {
     TokenizeProof {
         inclusion_proof: make_inclusion_proof(),
         inscription_id: INSCRIPTION_ID,
         btc_utxo: BTC_UTXO,
         owner_btc_address: 0x62746361646472,
-        starknet_recipient: zero_addr,
+        starknet_recipient: recipient,
     }
 }
 
-// Test 1: tokenize succeeds, status becomes Active, returns token_id > 0
+fn make_tokenize_proof() -> TokenizeProof {
+    let zero_addr: ContractAddress = 0x0_felt252.try_into().unwrap();
+    make_tokenize_proof_for(zero_addr)
+}
+
+// Test 1: tokenize succeeds, status becomes Active, returns token_id > 0,
+// AND the synthetic NFT is actually minted on SyntheticOrdinals
 #[test]
 fn test_tokenize_inscription() {
     let verifier = deploy_header_verifier_with_block();
-    let registry = deploy_registry(verifier.contract_address);
+    let synthetic = deploy_synthetic();
+    let registry = deploy_registry(verifier.contract_address, synthetic.contract_address);
 
-    let proof = make_tokenize_proof();
+    let recipient: ContractAddress = 0x123_felt252.try_into().unwrap();
+    let proof = make_tokenize_proof_for(recipient);
     let token_id = registry.tokenize(proof);
 
     assert(token_id > 0, 'token_id should be > 0');
@@ -78,16 +100,28 @@ fn test_tokenize_inscription() {
     let entry = registry.get_entry(INSCRIPTION_ID);
     assert(entry.synthetic_token_id == token_id, 'token id mismatch');
     assert(entry.btc_utxo == BTC_UTXO, 'utxo mismatch');
+
+    // The cross-contract mint actually happened: SyntheticOrdinals knows about the token
+    let nft_owner = synthetic.owner_of(token_id);
+    assert(nft_owner == recipient, 'NFT not minted to recipient');
+
+    let inscription_on_nft = synthetic.get_inscription_id(token_id);
+    assert(inscription_on_nft == INSCRIPTION_ID, 'NFT inscription_id mismatch');
+
+    let frozen = synthetic.is_frozen(token_id);
+    assert(frozen == false, 'NFT should not be frozen');
 }
 
 // Test 2: after tokenize, invalidate with spent proof → status becomes Invalidated
+// AND the synthetic NFT gets frozen
 #[test]
 fn test_invalidate_on_utxo_spent() {
     let verifier = deploy_header_verifier_with_block();
-    let registry = deploy_registry(verifier.contract_address);
+    let synthetic = deploy_synthetic();
+    let registry = deploy_registry(verifier.contract_address, synthetic.contract_address);
 
     let token_proof = make_tokenize_proof();
-    registry.tokenize(token_proof);
+    let token_id = registry.tokenize(token_proof);
 
     let spent_proof = SpentProof {
         spending_tx_inclusion: make_inclusion_proof(),
@@ -101,16 +135,21 @@ fn test_invalidate_on_utxo_spent() {
 
     let status = registry.get_status(INSCRIPTION_ID);
     assert(status == Status::Invalidated, 'should be Invalidated');
+
+    // Synthetic NFT should be frozen
+    let frozen = synthetic.is_frozen(token_id);
+    assert(frozen == true, 'NFT should be frozen');
 }
 
 // Test 3: after tokenize, recommit with new UTXO → status stays Active, UTXO updated
 #[test]
 fn test_recommit_keeps_active() {
     let verifier = deploy_header_verifier_with_block();
-    let registry = deploy_registry(verifier.contract_address);
+    let synthetic = deploy_synthetic();
+    let registry = deploy_registry(verifier.contract_address, synthetic.contract_address);
 
     let token_proof = make_tokenize_proof();
-    registry.tokenize(token_proof);
+    let token_id = registry.tokenize(token_proof);
 
     let recommit_proof = SpentProof {
         spending_tx_inclusion: make_inclusion_proof(),
@@ -127,21 +166,36 @@ fn test_recommit_keeps_active() {
 
     let entry = registry.get_entry(INSCRIPTION_ID);
     assert(entry.btc_utxo == NEW_UTXO, 'utxo should be updated');
+
+    // NFT stays unfrozen on recommit
+    let frozen = synthetic.is_frozen(token_id);
+    assert(frozen == false, 'NFT should stay unfrozen');
 }
 
-// Test 4: release sets status back to Idle
+// Test 4: release sets status back to Idle and burns the NFT
 // PoC: owner check removed due to get_caller_address v3 syscall toolchain incompatibility
 #[test]
 fn test_release_sets_idle() {
     let verifier = deploy_header_verifier_with_block();
-    let registry = deploy_registry(verifier.contract_address);
+    let synthetic = deploy_synthetic();
+    let registry = deploy_registry(verifier.contract_address, synthetic.contract_address);
 
-    let proof = make_tokenize_proof();
-    registry.tokenize(proof);
+    let recipient: ContractAddress = 0x123_felt252.try_into().unwrap();
+    let proof = make_tokenize_proof_for(recipient);
+    let token_id = registry.tokenize(proof);
+
+    // Confirm NFT is owned by recipient before release
+    let owner_before = synthetic.owner_of(token_id);
+    assert(owner_before == recipient, 'pre-release owner wrong');
 
     let result = registry.release(INSCRIPTION_ID);
     assert(result == true, 'release should return true');
 
     let status = registry.get_status(INSCRIPTION_ID);
     assert(status == Status::Idle, 'status should be Idle');
+
+    // NFT should be burned (owner zeroed)
+    let zero_addr: ContractAddress = 0x0_felt252.try_into().unwrap();
+    let owner_after = synthetic.owner_of(token_id);
+    assert(owner_after == zero_addr, 'NFT should be burned');
 }

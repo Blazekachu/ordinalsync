@@ -27,6 +27,7 @@ export default function TokenizePage() {
   const [step, setStep] = useState<TxStep>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [txHashes, setTxHashes] = useState<{ header?: string; tokenize?: string }>({});
+  const [tokenizedId, setTokenizedId] = useState<string>('');
 
   // Auto-fill Starknet address from wallet
   useEffect(() => {
@@ -114,6 +115,7 @@ export default function TokenizePage() {
         console.warn('Failed to POST to indexer — on-chain state is the source of truth');
       });
 
+      setTokenizedId(inscriptionId);
       setStep('success');
       setInscriptionId('');
       setBtcUtxo('');
@@ -211,7 +213,7 @@ export default function TokenizePage() {
       </form>
 
       {step === 'success' && (
-        <div className="mt-4 p-4 rounded bg-green-900/50 text-green-300 text-sm space-y-2">
+        <div className="mt-4 p-4 rounded bg-green-900/50 text-green-300 text-sm space-y-3">
           <p className="font-bold">Tokenization successful!</p>
           {txHashes.header && (
             <p>
@@ -238,6 +240,19 @@ export default function TokenizePage() {
                 {txHashes.tokenize.slice(0, 10)}...{txHashes.tokenize.slice(-6)}
               </a>
             </p>
+          )}
+          {tokenizedId && (
+            <div className="pt-2 border-t border-green-700/50">
+              <Link
+                href={`/inscription/${tokenizedId}`}
+                className="inline-block bg-orange-600 hover:bg-orange-500 text-white font-bold px-4 py-2 rounded transition-colors"
+              >
+                View your token &rarr;
+              </Link>
+              <p className="text-xs text-green-400/70 mt-2">
+                Your synthetic ordinal (token + on-chain registry entry) lives at the link above.
+              </p>
+            </div>
           )}
         </div>
       )}
