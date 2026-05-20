@@ -5,6 +5,25 @@
 
 ---
 
+## Updates Since Submission (2026-05-19)
+
+This proposal was submitted to the Starknet Foundation Seed Grant program on
+2026-05-19. Development has continued since:
+
+- **Real ERC-721 minting.** `OrdinalRegistry.tokenize()` now performs a
+  cross-contract call to `SyntheticOrdinals.mint()`, so an actual synthetic
+  NFT is minted on tokenize (and frozen on invalidate, burned on release).
+  The originally-submitted PoC only wrote an internal registry entry.
+- **Contracts redeployed** to Starknet Sepolia. Current addresses are in
+  [`README.md`](./README.md); the addresses in the "Deployed Contract
+  Addresses" section below are the originals as submitted, kept for the record.
+- **Live demo** at https://ordinalsync.vercel.app
+
+The contract addresses and demo transaction hashes further down this document
+are the originals from the 2026-05-19 submission and are preserved unchanged.
+
+---
+
 ## Project Name
 
 OrdinalSync
